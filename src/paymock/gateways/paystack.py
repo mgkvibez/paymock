@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
+from ..delivery import SCENARIOS, engine, scenario_plan
+from ..registry import registry
 from ..store import store
 from ..webhooks import build
 
@@ -52,10 +54,61 @@ def verify(reference: str):
 
 @router.post("/_settle/{reference}")
 def settle(reference: str, body: dict):
-    """paymock extension: force a transaction to success/failed to test each path."""
+    """paymock extension: force a transaction to a status and (optionally)
+    auto-deliver its webhook with a failure scenario attached.
+
+    body: {"status": "success", "scenario": "duplicate"|"delayed"|
+    "out_of_order"|"none", "delay_seconds": 30}
+    """
     status = body.get("status", "success")
+    scenario = body.get("scenario", "none")
+    if scenario not in SCENARIOS:
+        raise HTTPException(400, detail=f"unknown scenario: {scenario} (known: {', '.join(SCENARIOS)})")
     txn = store.settle(reference, status)
     if not txn:
         raise HTTPException(404, detail="Transaction not found")
     raw, headers = build("paystack", txn, status)
-    return {"event": "charge.success" if status == "success" else "charge.failed", "webhook_body": raw.decode(), "webhook_headers": headers}
+    event = "charge.success" if status == "success" else "charge.failed"
+
+    reg = registry.get("paystack")
+    queued = 0
+    if reg:
+        for delivery, delay in scenario_plan(
+            gateway="paystack", txn=txn, status=status, scenario=scenario,
+            body=raw, headers=headers, url=reg.url, schedule=reg.schedule,
+            delay_seconds=body.get("delay_seconds", 30.0),
+            build_event=lambda s: build("paystack", txn, s),
+        ):
+            engine.enqueue(delivery, delay)
+            queued += 1
+    return {
+        "event": event,
+        "webhook_body": raw.decode(),
+        "webhook_headers": headers,
+        "scenario": scenario,
+        "auto_deliveries_queued": queued,
+    }
+
+
+@router.post("/_webhooks/register")
+def register_webhook(body: dict):
+    """Register the local URL that auto-delivered webhooks are POSTed to.
+
+    body: {"url": "http://localhost:3000/webhooks/paystack",
+           "schedule": "paystack_live"|"paystack_test"}   (schedule optional)
+    """
+    url = body.get("url")
+    if not url:
+        raise HTTPException(400, detail="url is required")
+    try:
+        reg = registry.register("paystack", url, body.get("schedule"))
+    except ValueError as e:
+        raise HTTPException(400, detail=str(e))
+    return {"registered": url, "schedule": reg.schedule_key,
+            "time_scale": engine.time_scale}
+
+
+@router.get("/_webhooks/deliveries")
+def deliveries():
+    """Every delivery attempt, newest last — assert retry counts and spacing."""
+    return {"deliveries": engine.log("paystack")}

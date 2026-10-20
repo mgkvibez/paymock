@@ -11,7 +11,7 @@ dependencies = ["fastapi>=0.110", "uvicorn>=0.29", "pydantic>=2.6"]
 dev = ["pytest>=8", "httpx>=0.27"]
 
 [project.scripts]
-paymock = "paymock.main:serve"
+paymock = "paymock.main:cli"
 
 [build-system]
 requires = ["hatchling"]

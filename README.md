@@ -48,3 +48,23 @@ Monnify, Interswitch and M-Pesa route mocks, webhook auto-delivery to a register
 ## License
 
 MIT.
+
+## Fire the failure scenarios (v0.2)
+
+The sandbox never shows you live-mode behavior — Paystack retries live
+webhooks every 3 minutes for the first 4 tries, then hourly for 72
+hours. paymock reproduces that against your local dev server:
+
+```bash
+# your app runs at localhost:3000/webhook
+paymock deliver --scenario duplicate  --url http://localhost:3000/webhook --reference T-1
+paymock deliver --scenario failed     --url http://localhost:3000/webhook --reference T-2 --time-scale 0.001
+```
+
+`duplicate` delivers the same event 3 times — your handler must credit
+exactly once. `failed` follows the real retry schedule (compressed).
+`out_of_order` sends the stale pending event after the success.
+
+Drop-in test fixtures: `fixtures/pytest/` (asserts "no double credit")
+and `fixtures/jest/`. M-Pesa Daraja scenarios: planned, not yet built.
+

@@ -36,6 +36,55 @@ assert hmac.compare_digest(
 3. *Webhooks*: exact HMAC signatures — `X-Paystack-Signature` (SHA-512) and `verif-hash` (SHA-256) — with the same payload shapes your handlers expect.
 4. *Stateful*: transactions persist in memory between requests; `pending` until you settle them, like a real checkout.
 5. *Failure injection*: `POST /_settle/:ref {"status": "failed"}` — test your decline and timeout code paths on demand.
+6. *Auto-delivery with real retry schedules*: register your local URL and paymock POSTs signed webhooks to it, retrying failures exactly like the live gateways do.
+7. *Failure scenarios*: `duplicate`, `delayed`, `out_of_order` webhooks, built in.
+
+## Webhook auto-delivery and retries
+
+The official sandboxes never show you live retry behavior, so duplicate and late webhooks only surface in production. paymock reproduces it on localhost:
+
+    # register where you want webhooks delivered
+    POST /paystack/_webhooks/register
+    {"url": "http://localhost:3000/webhooks/paystack"}
+
+    # settle a payment and have the webhook auto-delivered, twice
+    POST /paystack/_settle/<ref>
+    {"status": "success", "scenario": "duplicate"}
+
+    # inspect every delivery attempt (attempt #, status code, timing)
+    GET /paystack/_webhooks/deliveries
+
+Retry schedules, in gateway-accurate seconds:
+
+*Paystack live* (per Paystack's docs): every 3 minutes for the first 4 tries, then hourly for 72 hours.
+*Paystack test* (same page): hourly, 10 times.
+*Flutterwave*: up to 3 retries on non-2xx per Flutterwave's engineering blog. Their intervals are not officially documented — paymock defaults to 60s/300s/900s, marked clearly as our choice, and the schedule is data you can change.
+
+Time compression: delays are gateway seconds divided by `time_scale`. Default 1.0 (production-faithful waits); the test fixtures use 10000, so a 3-minute retry resolves in under 20ms. Set `PAYMOCK_TIME_SCALE` or pass it at app creation.
+
+## Test fixtures: assert "no double credit"
+
+pytest fixtures ship with the package (entry point `pytest11`, auto-registered on install):
+
+    def test_no_double_credit(paymock, webhook_receiver):
+        paymock.register_webhook("paystack", webhook_receiver.url)
+        ref = paymock.initialize("paystack", amount=50000)
+        paymock.settle("paystack", ref, "success", scenario="duplicate")
+
+        events = webhook_receiver.events("charge.success")
+        assert len(events) == 2                    # delivered twice...
+        assert events[0]["body"] == events[1]["body"]  # ...identically
+        # your app under test must credit this order exactly once
+
+`webhook_receiver.fail_times = 2` makes your endpoint fail twice so you can assert the retry schedule from `paymock.deliveries()`.
+
+For Jest (Node 18+), `jest/paymock.js` provides the same flow against a running paymock:
+
+    const collector = webhookCollector(yourExpressApp);
+    await paymock.register("paystack", collector.url);
+    await paymock.settle("paystack", ref, "success", "duplicate");
+    await collector.waitFor(2);
+    expect(new Set(collector.events("charge.success").map(e => e.data.reference)).size).toBe(1);
 
 ## Why
 
@@ -43,7 +92,7 @@ assert hmac.compare_digest(
 
 ## Roadmap
 
-Monnify, Interswitch and M-Pesa route mocks, webhook auto-delivery to a registered local URL, and a small dashboard UI to visualize event flow.
+Monnify, Interswitch and M-Pesa (Daraja) route mocks, and a small dashboard UI to visualize event flow.
 
 ## License
 

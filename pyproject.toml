@@ -8,7 +8,7 @@ license = { text = "MIT" }
 dependencies = ["fastapi>=0.110", "uvicorn>=0.29", "pydantic>=2.6"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "httpx>=0.27"]
+dev = ["pytest>=8", "httpx>=0.27", "flask>=3", "paystackapi>=1.9"]
 
 [project.entry-points.pytest11]
 paymock = "paymock.pytest_plugin"

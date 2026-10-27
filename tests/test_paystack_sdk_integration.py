@@ -23,6 +23,8 @@ def _sdk(base_url):
     import paystackapi
     paystackapi.API_URL = f"{base_url}/paystack/"
     paystackapi.SECRET_KEY = SECRET
+    from paystackapi.base import Borg
+    Borg._shared_state = {}  # reset the singleton between tests/servers
     from paystackapi.transaction import Transaction
     return Transaction(secret_key=SECRET)
 

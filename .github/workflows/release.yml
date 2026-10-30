@@ -1,0 +1,36 @@
+name: release
+
+# Publishes to PyPI through trusted publishing (OIDC). No token is stored anywhere.
+# One-time setup by the owner at pypi.org/manage/account/publishing:
+#   Project Name: paymock | Owner: mgkvibez | Repository: paymock
+#   Workflow: release.yml | Environment: pypi
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Refuse to publish if the tag and the package version disagree
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(python -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          echo "tag=$tag version=$version"
+          [ "$tag" = "$version" ] || { echo "tag v$tag does not match version $version"; exit 1; }
+      - name: Build and check
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          python -m twine check dist/*
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

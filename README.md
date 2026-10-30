@@ -1,12 +1,19 @@
 # paymock
 
+[![ci](https://github.com/mgkvibez/paymock/actions/workflows/ci.yml/badge.svg)](https://github.com/mgkvibez/paymock/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![python: 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](pyproject.toml)
+
 **stripe-mock for African payments.** A stateful, offline mock server for Paystack and Flutterwave — signed webhooks included, no API keys, no tunnel, no live internet.
 
 If you build with Paystack or Flutterwave, you know the pain: brittle sandboxes, webhooks that need a public tunnel, and no way to test the *failure* paths (bank downtime, declined cards, duplicate deliveries) without hoping they happen.
 
 ```bash
-pip install paymock && paymock
+pipx install git+https://github.com/mgkvibez/paymock.git
 ```
+
+Not on PyPI yet: `paymock` is reserved for this project and the release workflow is in place,
+so `pipx install paymock` will work as soon as the first tag is pushed.
 
 ```python
 # your app, unchanged — only base_url changes

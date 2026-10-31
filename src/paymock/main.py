@@ -94,7 +94,15 @@ def cli() -> None:
     """`paymock` — serve the sandbox, or `paymock deliver` a scenario."""
     import sys
 
-    if len(sys.argv) > 1 and sys.argv[1] == "deliver":
+    argv = sys.argv[1:]
+    if argv and argv[0] in ("--version", "-V"):
+        print("paymock %s" % __version__)
+        return
+    if argv and argv[0] in ("--help", "-h"):
+        print("paymock %s\n\nusage:\n  paymock              serve the sandbox on $PAYMOCK_PORT (default 9090)\n  paymock deliver ...  fire a scenario at your webhook\n  paymock --version    print the installed version" % __version__)
+        return
+    if argv and argv[0] == "deliver":
+        sys.argv.pop(1)
         sys.argv.pop(1)
         deliver_cli()
     else:
